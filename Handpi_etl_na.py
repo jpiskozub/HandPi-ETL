@@ -1,11 +1,12 @@
 import random
 
-import pandas
+import numpy as np
 import pandas as pd
 import tsaug
 import pendulum
 import psycopg as psql
 
+#%%
 dbpi_ip_addr = '192.168.0.100'
 
 ADC_channels=['P1_1', 'P1_2', 'P2_1', 'P2_2', 'P3_1', 'P3_2', 'P4_1', 'P4_2', 'P5_1', 'P5_2']
@@ -49,38 +50,27 @@ sign_types_dict = {'a': sign_types[0],
                    'ź': sign_types[1],
                    'ż': sign_types[1]}
 
-def main():
+#%%
 
-    with psql.connect(dbname = 'handpi', user = 'handpi', password = 'raspberryhandpi', host = dbpi_ip_addr) as psqlconn:
-        psqlcur = psqlconn.cursor()
-    
-        psqlcur.execute('SELECT count(*) FROM static_gestures;')
-        max_size_stat_gest = psqlcur.fetchone()
+with psql.connect(dbname = 'handpi', user = 'handpi', password = 'raspberryhandpi', host = dbpi_ip_addr) as psqlconn:
+    psqlcur = psqlconn.cursor()
 
-        psqlcur.execute('SELECT count(*) FROM dynamic_gestures;')
-        max_size_dyn_gest = psqlcur.fetchone()
+    psqlcur.execute('SELECT count(*) FROM static_gestures;')
+    max_size_stat_gest = psqlcur.fetchone()
+    psqlcur.execute('SELECT count(*) FROM dynamic_gestures;')
+    max_size_dyn_gest = psqlcur.fetchone()
 
-        sample_size = 100
+    sample_size = 100
+    rand_stat_gest = random.randrange(1, max_size_stat_gest[0], sample_size)
+    rand_dyn_gest = random.randrange(1, max_size_dyn_gest[0], sample_size)
 
-        rand_stat_gest = random.randrange(1, max_size_stat_gest[0], sample_size)
-        rand_dyn_gest = random.randrange(1, max_size_dyn_gest[0], sample_size)
-
-        gesture_type=random.choice(['static_gestures', 'dynamic_gestures'])
-
-
-        if gesture_type == 'static_gesture':
-            psqlcur.execute('SELECT * FROM {} OFFSET (%s) LIMIT (%s);'.format(gesture_type), (rand_stat_gest, rand_stat_gest+sample_size,))
-        else:
-            psqlcur.execute('SELECT * FROM {} OFFSET (%s) LIMIT (%s);'.format(gesture_type), (rand_dyn_gest, rand_dyn_gest+sample_size,))
-        gesture = psqlcur.fetchall()
-        print(gesture[:1])
+    gesture_type=random.choice(['static_gestures', 'dynamic_gestures'])
+    if gesture_type == 'static_gesture':
+        psqlcur.execute('SELECT * FROM {} OFFSET (%s) LIMIT (%s);'.format(gesture_type), (rand_stat_gest, sample_size,))
+    else:
+        psqlcur.execute('SELECT * FROM {} OFFSET (%s) LIMIT (%s);'.format(gesture_type), (rand_dyn_gest, sample_size,))
 
 
+#%%
+gesture = pd.DataFrame(psqlcur.fetchall())
 
-
-
-
-
-if __name__ == '__main__':
-
-    main()
