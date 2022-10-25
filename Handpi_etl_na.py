@@ -5,6 +5,8 @@ import pandas as pd
 import tsaug
 import pendulum
 import psycopg as psql
+from tsaug.visualization import plot
+
 
 #%%
 dbpi_ip_addr = '192.168.0.100'
@@ -74,3 +76,32 @@ with psql.connect(dbname = 'handpi', user = 'handpi', password = 'raspberryhandp
 #%%
 gesture = pd.DataFrame(psqlcur.fetchall())
 
+#%%
+my_augmenter = (
+                tsaug.TimeWarp(n_speed_change=1, max_speed_ratio=2)*5 # random time warping 5 times in parallel
+                #tsaug.Quantize(n_levels=[100, 500, 1500])  # random quantize to 10-, 20-, or 30- level sets
+                #tsaug.Drift(max_drift=0.01, n_drift_points=20, kind='additive', per_channel=True, normalize=True, repeats=2, prob=1.0, seed=None) @ 0.8  # with 80% probability, random drift the signal up to 10% - 50%
+                #tsaug.Convolve(window='hann', size=7, per_channel=False, repeats=1, prob=1.0, seed=None)
+                #tsaug.Reverse() @ 0.5  # with 50% probability, reverse the sequence
+                #tsaug.Crop(70, resize=100, repeats=1, prob=1.0)
+                #+tsaug.AddNoise(scale=0.005)
+                )
+#%%
+gesture_buf = gesture.to_numpy()
+gesture_buf = gesture_buf[:,1:17]
+gesture_buf=gesture_buf.astype(float)
+#%%
+
+np.savetxt('test_buf.csv',gesture_buf)
+#%%
+gesture_buf_3d = gesture_buf.reshape(1,sample_size,16)
+gesture_buf_3d_mask = gesture_buf.reshape(1,sample_size,16)
+
+plot(gesture_buf_3d)
+#%%
+gesture_augmented = my_augmenter.augment(gesture_buf_3d,gesture_buf_3d_mask)
+#%%
+gesture_augmented_buf=gesture_augmented[0].reshape(5,sample_size,16)
+plot(gesture_augmented_buf)
+
+#np.savetxt('test.csv',gesture_augmented)

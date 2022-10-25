@@ -126,3 +126,13 @@ dmypy.json
 .idea/HandPi-ETL.iml
 
 .idea/modules.xml
+
+beethoven.wav
+
+test_buf.csv
+
+test.csv
+
+tsaug_test.ipynb
+
+logs/scheduler/latest
