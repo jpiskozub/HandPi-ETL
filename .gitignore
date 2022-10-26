@@ -136,3 +136,5 @@ test.csv
 tsaug_test.ipynb
 
 logs/scheduler/latest
+
+config.ini

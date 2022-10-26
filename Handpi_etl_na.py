@@ -7,11 +7,14 @@ import pendulum
 import psycopg as psql
 from tsaug.visualization import plot
 
+import configparser
 
-#%%
-dbpi_ip_addr = '192.168.0.100'
+config = configparser.ConfigParser()
 
-ADC_channels=['P1_1', 'P1_2', 'P2_1', 'P2_2', 'P3_1', 'P3_2', 'P4_1', 'P4_2', 'P5_1', 'P5_2']
+# %%
+
+
+ADC_channels = ['P1_1', 'P1_2', 'P2_1', 'P2_2', 'P3_1', 'P3_2', 'P4_1', 'P4_2', 'P5_1', 'P5_2']
 IMU_channels = ['Euler_x', 'Euler_y', 'Euler_z', 'Acc_x', 'Acc_y', 'Acc_z']
 
 sign_types = ['static', 'dynamic']
@@ -52,9 +55,10 @@ sign_types_dict = {'a': sign_types[0],
                    'ź': sign_types[1],
                    'ż': sign_types[1]}
 
-#%%
+config.read('config.ini')
+# %%
 
-with psql.connect(dbname = 'handpi', user = 'handpi', password = 'raspberryhandpi', host = dbpi_ip_addr) as psqlconn:
+with psql.connect(dbname=config['DB']['dbname'], user=config['DB']['user'], password=config['DB']['password'], host=config['DB']['dbpi_ip_addr']) as psqlconn:
     psqlcur = psqlconn.cursor()
 
     psqlcur.execute('SELECT count(*) FROM static_gestures;')
@@ -66,42 +70,77 @@ with psql.connect(dbname = 'handpi', user = 'handpi', password = 'raspberryhandp
     rand_stat_gest = random.randrange(1, max_size_stat_gest[0], sample_size)
     rand_dyn_gest = random.randrange(1, max_size_dyn_gest[0], sample_size)
 
-    gesture_type=random.choice(['static_gestures', 'dynamic_gestures'])
+    gesture_type = random.choice(['static_gestures', 'dynamic_gestures'])
     if gesture_type == 'static_gesture':
         psqlcur.execute('SELECT * FROM {} OFFSET (%s) LIMIT (%s);'.format(gesture_type), (rand_stat_gest, sample_size,))
     else:
         psqlcur.execute('SELECT * FROM {} OFFSET (%s) LIMIT (%s);'.format(gesture_type), (rand_dyn_gest, sample_size,))
 
-
-#%%
+# %%
 gesture = pd.DataFrame(psqlcur.fetchall())
 
-#%%
-my_augmenter = (
-                tsaug.TimeWarp(n_speed_change=1, max_speed_ratio=2)*5 # random time warping 5 times in parallel
-                #tsaug.Quantize(n_levels=[100, 500, 1500])  # random quantize to 10-, 20-, or 30- level sets
-                #tsaug.Drift(max_drift=0.01, n_drift_points=20, kind='additive', per_channel=True, normalize=True, repeats=2, prob=1.0, seed=None) @ 0.8  # with 80% probability, random drift the signal up to 10% - 50%
-                #tsaug.Convolve(window='hann', size=7, per_channel=False, repeats=1, prob=1.0, seed=None)
-                #tsaug.Reverse() @ 0.5  # with 50% probability, reverse the sequence
-                #tsaug.Crop(70, resize=100, repeats=1, prob=1.0)
-                #+tsaug.AddNoise(scale=0.005)
-                )
-#%%
-gesture_buf = gesture.to_numpy()
-gesture_buf = gesture_buf[:,1:17]
-gesture_buf=gesture_buf.astype(float)
-#%%
+# %%
+augmenter_values = {
+                    'n_speed_change':2,
+                    'max_speed_ratio':2,
+                    'max_drift':1,
+                    'n_drift_points':2,
+                    'noise_scale':0.05
+                    }
 
-np.savetxt('test_buf.csv',gesture_buf)
-#%%
-gesture_buf_3d = gesture_buf.reshape(1,sample_size,16)
-gesture_buf_3d_mask = gesture_buf.reshape(1,sample_size,16)
+
+repetitions = 5
+my_augmenter = (
+        tsaug.TimeWarp(n_speed_change=augmenter_values['n_speed_change'], max_speed_ratio=augmenter_values['max_speed_ratio']) * repetitions  # random time warping 5 times in parallel
+        # tsaug.Quantize(n_levels=[1000, 5000, 15000])  # random quantize to 10-, 20-, or 30- level sets
+        + tsaug.Drift(max_drift=augmenter_values['max_drift'], n_drift_points=augmenter_values['n_drift_points'], kind='additive', per_channel=True, normalize=True, seed=None) @ 0.8  # with 80% probability, random drift the signal up to 10% - 50%
+        # tsaug.Convolve(window='hann', size=7, per_channel=False, repeats=1, prob=1.0, seed=None)
+        # tsaug.Reverse() @ 0.5  # with 50% probability, reverse the sequence
+        # tsaug.Crop(70, resize=100, repeats=1, prob=1.0)
+        + tsaug.AddNoise(scale=augmenter_values['noise_scale'])
+                )
+# %%
+gesture_buf_full = gesture.to_numpy()
+gesture_buf = gesture_buf_full[:, 1:17]
+gesture_buf = gesture_buf.astype(float)
+
+# %%
+gesture_buf_3d = gesture_buf.reshape(1, sample_size, 16) 
+gesture_buf_3d_mask = gesture_buf.reshape(1, sample_size, 16)
 
 plot(gesture_buf_3d)
-#%%
-gesture_augmented = my_augmenter.augment(gesture_buf_3d,gesture_buf_3d_mask)
-#%%
-gesture_augmented_buf=gesture_augmented[0].reshape(5,sample_size,16)
+# %%
+gesture_augmented = my_augmenter.augment(gesture_buf_3d, gesture_buf_3d_mask)
+# %%
+gesture_augmented_buf = gesture_augmented[0].reshape(repetitions, sample_size, 16)
 plot(gesture_augmented_buf)
 
-#np.savetxt('test.csv',gesture_augmented)
+# %%
+gesture_tmstmp = gesture_buf_full[:, 18]
+gesture_tmstmp = np.diff(gesture_tmstmp)
+
+gesture_tmstmp_period = [np.timedelta64(0)]
+
+for i in range(gesture_tmstmp.size):
+    gesture_tmstmp_period.append(gesture_tmstmp[i] + np.timedelta64(gesture_tmstmp_period[i - 1]))
+
+
+#%%
+
+with psql.connect(dbname=config['DB']['dbname'], user=config['DB']['user'], password=config['DB']['password'], host=config['DB']['dbpi_ip_addr']) as psqlconn:
+    psqlcur = psqlconn.cursor()
+    SQL_augmented_insert = 'INSERT INTO augmented_gestures (p1_1, p1_2, p2_1, p2_2, p3_1, p3_2, p4_1, p4_2, p5_1, p5_2, gyro_x, gyro_y, gyro_z, acc_x, acc_y, acc_z, gesture, tmstmp_interval, aug_id ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'
+
+    psqlcur.execute("SELECT MAX(aug_id) FROM augmented_gestures;") #May be done with RETURN SQL statement - To be explored
+    last_id=psqlcur.fetchone()
+
+    if last_id[0] == None:
+        id_column = [1 for i in range(sample_size)]
+    else:
+        id_column = [last_id[0]+1 for i in range(sample_size)]
+
+    gesture_augmented_df = pd.DataFrame(np.column_stack((gesture_augmented_buf[1,:,:],gesture.iloc[:,17],gesture_tmstmp_period,id_column)))
+
+    for i in range(sample_size):
+        psqlcur.execute(SQL_augmented_insert,gesture_augmented_df.values[i,:].tolist())
+
