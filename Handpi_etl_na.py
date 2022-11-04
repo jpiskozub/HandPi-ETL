@@ -66,7 +66,7 @@ with psql.connect(dbname=config['DB']['dbname'], user=config['DB']['user'], pass
     psqlcur.execute('SELECT count(*) FROM dynamic_gestures;')
     max_size_dyn_gest = psqlcur.fetchone()
 
-    sample_size = 100
+    sample_size = 50
     rand_stat_gest = random.randrange(1, max_size_stat_gest[0], sample_size)
     rand_dyn_gest = random.randrange(1, max_size_dyn_gest[0], sample_size)
 
@@ -105,7 +105,7 @@ gesture_buf = gesture_buf_full[:, 1:17]
 gesture_buf = gesture_buf.astype(float)
 
 # %%
-gesture_buf_3d = gesture_buf.reshape(1, sample_size, 16) 
+gesture_buf_3d = gesture_buf.reshape(1, sample_size, 16)
 gesture_buf_3d_mask = gesture_buf.reshape(1, sample_size, 16)
 
 plot(gesture_buf_3d)
@@ -117,15 +117,19 @@ plot(gesture_augmented_buf)
 
 # %%
 gesture_tmstmp = gesture_buf_full[:, 18]
-gesture_tmstmp = np.diff(gesture_tmstmp)
+gesture_tmstmp_diff = np.diff(gesture_tmstmp)
 
 gesture_tmstmp_period = [np.timedelta64(0)]
 
-for i in range(gesture_tmstmp.size):
-    gesture_tmstmp_period.append(gesture_tmstmp[i] + np.timedelta64(gesture_tmstmp_period[i - 1]))
+for i in range(gesture_tmstmp_diff.size):
+    if i==0:
+        gesture_tmstmp_period.append(gesture_tmstmp_diff[i] + np.timedelta64(gesture_tmstmp_period[i - 1]))
+    else:
+        gesture_tmstmp_period.append((gesture_tmstmp_diff[i] + gesture_tmstmp_diff[i - 1])+ np.timedelta64(gesture_tmstmp_period[i - 1]))
 
 
-#%%
+
+        #%%
 
 with psql.connect(dbname=config['DB']['dbname'], user=config['DB']['user'], password=config['DB']['password'], host=config['DB']['dbpi_ip_addr']) as psqlconn:
     psqlcur = psqlconn.cursor()
