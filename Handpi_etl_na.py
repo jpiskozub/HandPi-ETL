@@ -163,7 +163,7 @@ def upload_augmented_gesture(gesture_augmented_df):
             psqlcur.execute(SQL_augmented_insert,gesture_augmented_df.values[i,:].tolist())
  # %%           
 def detect_shortcircuit(gesture_df, shtct_threshold):
-    if True in gesture_df.iloc[:,1:11].ge(shtct_threshold) :
+    if True in list(gesture_df.iloc[:,1:11].ge(shtct_threshold).any()):
         return True
     else:
         return False
@@ -215,7 +215,7 @@ def normalize_data(gesture_df, show_results=True):
         gesture_df.plot(x = 'timestamp', y = [*IMU_channels,*ADC_channels], subplots =[ADC_channels, IMU_channels[0:3], IMU_channels[3:6]])
     
 # %%
-def save2csv(sample_size):
+def get_exam_gestures(sample_size):
     config = configparser.ConfigParser()
     config.read('config.ini')
     
@@ -231,14 +231,19 @@ def save2csv(sample_size):
         dynamic_gestures = pd.DataFrame(psqlcur.fetchall())
     gestbase = pd.concat([static_gestures,dynamic_gestures], ignore_index = True)
     gestbase.columns = ['exam_id', *ADC_channels, *IMU_channels, 'sign', 'timestamp', 'gesture_id']
+    return gestbase
+# %%
+def save2csv(gesture_df,sample_size):
     
     
-    shtcrt = []
-    for i in range(0,gestbase.shape[0],sample_size):
-        gest = gestbase.iloc[i:i+sample_size]
-        shtcrt.append(detect_shortcircuit(gest,21000))
-    return shtcrt
-        
+
+    gest_csv = []
+    for i in range(0,gesture_df.shape[0],sample_size):
+        gest = gesture_df.iloc[i:i+sample_size]
+        if detect_shortcircuit(gest,24000) == False:
+            gest_csv.append(gest)
+    return gest_csv
+
 
 
 # %%
