@@ -9,7 +9,7 @@ from tsaug.visualization import plot
 
 import configparser
 from scipy import signal
-from sklearn import preprocessing
+import sklearn.preprocessing
 config = configparser.ConfigParser()
 
 
@@ -234,15 +234,24 @@ def get_exam_gestures(sample_size):
     return gestbase
 # %%
 def save2csv(gesture_df,sample_size):
-    
-    
 
-    gest_csv = []
+
+
+    gest_csv = pd.DataFrame()
+    gest_csv_l = []
+    gest_shtct_csv = pd.DataFrame()
+    gest_shtct_csv_l = []
     for i in range(0,gesture_df.shape[0],sample_size):
         gest = gesture_df.iloc[i:i+sample_size]
-        if detect_shortcircuit(gest,24000) == False:
-            gest_csv.append(gest)
-    return gest_csv
+        if not detect_shortcircuit(gest, 24000):
+            gest_csv_l.append(gest)
+        else:
+            gest_shtct_csv_l.append(gest)
+    gest_csv = pd.concat(gest_csv_l, ignore_index = True)
+    gest_shtct_csv = pd.concat(gest_shtct_csv_l, ignore_index = True)
+
+
+    return gest_csv.to_csv('gesty.csv', index=False),gest_shtct_csv.to_csv('gesty_zwarcia.csv', index=False)
 
 
 
