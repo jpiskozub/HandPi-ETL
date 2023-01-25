@@ -290,7 +290,7 @@ def examid_remap(gesture_df):
         36:('tt',15),
         37:('mp',16)}
 
-    gesture_df['exam_id'].map(examid_map)
+    gesture_df['exam_id'] = gesture_df['exam_id'].map(examid_map)
 # %%
 def generate_datasets(SAMPLE_SIZE):
 

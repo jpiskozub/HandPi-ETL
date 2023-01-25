@@ -140,3 +140,5 @@ logs/scheduler/latest
 config.ini
 
 .vscode/
+
+*.csv
