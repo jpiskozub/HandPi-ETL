@@ -70,6 +70,7 @@ def calculate_timedelta(gesture_df):
             gesture_tmstmp_period.append((gesture_tmstmp_diff[i] + gesture_tmstmp_diff[i - 1])+ np.timedelta64(gesture_tmstmp_period[i - 1]))
     gesture_df.iloc[:, 18] =  gesture_tmstmp_period
     return gesture_df
+
 #%%    
 def get_rand_gesture(sample_size, show_results = True):
     with psql.connect(dbname=config['DB']['dbname'], user=config['DB']['user'], password=config['DB']['password'], host=config['DB']['dbpi_ip_addr']) as psqlconn:
@@ -168,7 +169,7 @@ def detect_shortcircuit(gesture_df, shtct_threshold):
     else:
         return False
 # %%
-def ADC_smoothing(gesture_df, show_results=True):
+def ADC_smoothing(gesture_df, show_results):
     gesture_df.plot(x = 'timestamp', y = [*ADC_channels])
     
     WINDOW_SIZE = 7
@@ -179,8 +180,8 @@ def ADC_smoothing(gesture_df, show_results=True):
         
     #for (colname, colvals) in gesture_df.iloc[65:,0:9].items():
         #gesture_df[colname][65:] = signal.medfilt(colvals.values,WINDOW_SIZE)
-        
-    gesture_df.plot(x = 'timestamp', y = [*ADC_channels])
+    if show_results:
+        gesture_df.plot(x = 'timestamp', y = [*ADC_channels])
 
 # %%
 def IMU_smoothing(gesture_df, show_results=True):
@@ -252,8 +253,50 @@ def save2csv(gesture_df,sample_size):
 
 
     return gest_csv.to_csv('gesty.csv', index=False),gest_shtct_csv.to_csv('gesty_zwarcia.csv', index=False)
+#%%
+def examid_remap(gesture_df):
 
+    examid_map = {
+        1:('wd',1),
+        3:('jp',2),
+        4:('mp',3),
+        5:('mp',3),
+        7:('ku',4),
+        8:('ku',4),
+        9:('dd',5),
+        10:('dd',5),
+        11:('sw',6),
+        12:('zp',7),
+        13:('zp',7),
+        14:('zp',7),
+        15:('sw',6),
+        19:('Ku',8),
+        20:('Ku',8),
+        21:('Ku',8),
+        22:('pp',9),
+        23:('pp',9),
+        24:('pp',9),
+        25:('mo',10),
+        26:('sk',11),
+        27:('mu',12),
+        28:('mu',12),
+        29:('mk',13),
+        30:('mk',13),
+        31:('mk',13),
+        32:('mk',13),
+        33:('mk',13),
+        34:('mo',14),
+        35:('mo',14),
+        36:('tt',15),
+        37:('mp',16)}
 
-
+    gesture_df['exam_id'].map(examid_map)
 # %%
-#def get_all_gestures
+def generate_datasets(SAMPLE_SIZE):
+
+    df = get_exam_gestures(SAMPLE_SIZE)
+    ADC_smoothing(df,SAMPLE_SIZE)
+    IMU_smoothing(df,SAMPLE_SIZE)
+    examid_remap(df)
+    calculate_timedelta(df)
+    save2csv(df,SAMPLE_SIZE)
