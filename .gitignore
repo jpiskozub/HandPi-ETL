@@ -142,3 +142,7 @@ config.ini
 .vscode/
 
 *.csv
+
+*.twbr
+
+*.twb

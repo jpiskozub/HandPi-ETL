@@ -1,3 +1,4 @@
+#%%
 import random
 
 import numpy as np
@@ -10,6 +11,10 @@ from tsaug.visualization import plot
 import configparser
 from scipy import signal
 import sklearn.preprocessing
+from ast import literal_eval
+from functools import wraps
+
+
 config = configparser.ConfigParser()
 
 
@@ -57,6 +62,7 @@ sign_types_dict = {'a': sign_types[0],
 
 config.read('config.ini')
 SAMPLE_SIZE = 75
+#%%
 def calculate_timedelta(gesture_df):
     gesture_tmstmp = gesture_df.iloc[:, 18]
     gesture_tmstmp_diff = np.diff(gesture_tmstmp)
@@ -71,7 +77,7 @@ def calculate_timedelta(gesture_df):
     gesture_df.iloc[:, 18] =  gesture_tmstmp_period
     return gesture_df
 
-#%%    
+
 def get_rand_gesture(sample_size, show_results = True):
     with psql.connect(dbname=config['DB']['dbname'], user=config['DB']['user'], password=config['DB']['password'], host=config['DB']['dbpi_ip_addr']) as psqlconn:
         psqlcur = psqlconn.cursor()
@@ -100,9 +106,10 @@ def get_rand_gesture(sample_size, show_results = True):
     return gesture
 
 
-def augment_gesture(gesture_df, nr_of_reps):
+def  augment_gesture(gesture_df, nr_of_reps):
     gesture_buf_full = gesture_df.to_numpy()
-    gesture_buf = gesture_buf_full[:, 1:17]
+
+    gesture_buf = (gesture_buf_full[:, 1:17])
     gesture_buf = gesture_buf.astype(float)
 
     gesture_buf_3d = gesture_buf.reshape(1, gesture_df.shape[0], 16)
@@ -115,7 +122,7 @@ def augment_gesture(gesture_df, nr_of_reps):
                         'max_speed_ratio':2,
                         'max_drift':1,
                         'n_drift_points':2,
-                        'noise_scale':0.05
+                        'noise_scale':0.03
                         }
 
 
@@ -132,15 +139,50 @@ def augment_gesture(gesture_df, nr_of_reps):
 
 
     gesture_augmented = my_augmenter.augment(gesture_buf_3d, gesture_buf_3d_mask)
-
     gesture_augmented_buf = gesture_augmented[0].reshape(nr_of_reps, gesture_df.shape[0], 16)
     plot(gesture_augmented_buf)
-    
-    gesture_augmented_df = pd.DataFrame(np.column_stack((gesture_augmented_buf[1,:,:],gesture_df.iloc[:,17:20])))
+
+    sign_col = np.array(gesture_df['sign'])
+    exam_id_col = np.array(gesture_df['exam_id'])
+    tmstp_col = np.array(gesture_df['timestamp'])
+
+    for i in range(nr_of_reps-1):
+        sign_col = np.hstack((sign_col,gesture_df['sign']))
+        exam_id_col = np.hstack((exam_id_col,gesture_df['exam_id']))
+        tmstp_col = np.hstack((tmstp_col,gesture_df['timestamp']))
+
+    gesture_augmented_df = pd.DataFrame(np.column_stack((exam_id_col,gesture_augmented_buf.reshape(gesture_augmented_buf.shape[0]*gesture_augmented_buf.shape[1],gesture_augmented_buf.shape[2]),sign_col)))
+    gesture_augmented_df = pd.concat([gesture_augmented_df,pd.DataFrame(tmstp_col)],axis=1)
     
     return gesture_augmented_df
 
 
+def read_csv(csv_path):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+           dataset_df = pd.read_csv(csv_path, converters={"exam_id": literal_eval})
+           kwargs['dataset_df'] = dataset_df
+           func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+#%%
+def augment_dataset(dataset_df,nr_of_reps):
+    
+  
+    time_Series = [dataset_df.iloc[i:i + SAMPLE_SIZE].reset_index(drop=True) for i in range(0, dataset_df.shape[0] - SAMPLE_SIZE + 1, SAMPLE_SIZE)]
+    #time_Series = pd.concat(time_Series, axis=1).T
+
+    aug_df = pd.DataFrame
+    
+    for i in range(len(time_Series)):
+        pd.concat([aug_df,augment_gesture(time_Series[i],nr_of_reps)], ignore_index=True)
+    
+    return aug_df
+
+
+#%%
 
 
 
@@ -162,13 +204,13 @@ def upload_augmented_gesture(gesture_augmented_df):
 
         for i in range(gesture_augmented_df.shape[0]):
             psqlcur.execute(SQL_augmented_insert,gesture_augmented_df.values[i,:].tolist())
- # %%           
+
 def detect_shortcircuit(gesture_df, shtct_threshold):
     if True in list(gesture_df.iloc[:,1:11].ge(shtct_threshold).any()):
         return True
     else:
         return False
-# %%
+
 def ADC_smoothing(gesture_df, show_results):
     gesture_df.plot(x = 'timestamp', y = [*ADC_channels])
     
@@ -183,7 +225,7 @@ def ADC_smoothing(gesture_df, show_results):
     if show_results:
         gesture_df.plot(x = 'timestamp', y = [*ADC_channels])
 
-# %%
+
 def IMU_smoothing(gesture_df, show_results=True):
     if show_results == True:
         gesture_df.plot(x = 'timestamp', y = [*IMU_channels], subplots =[IMU_channels[0:3], IMU_channels[3:6]])
@@ -199,7 +241,7 @@ def IMU_smoothing(gesture_df, show_results=True):
         
     if show_results == True:    
         gesture_df.plot(x = 'timestamp', y = [*IMU_channels], subplots =[IMU_channels[0:3], IMU_channels[3:6]])
-# %%
+
 def normalize_data(gesture_df, show_results=True):
     if show_results == True:
         gesture_df.plot(x = 'timestamp', y = [*IMU_channels,*ADC_channels], subplots =[ADC_channels, IMU_channels[0:3], IMU_channels[3:6]])
@@ -215,7 +257,7 @@ def normalize_data(gesture_df, show_results=True):
     if show_results == True:    
         gesture_df.plot(x = 'timestamp', y = [*IMU_channels,*ADC_channels], subplots =[ADC_channels, IMU_channels[0:3], IMU_channels[3:6]])
     
-# %%
+
 def get_exam_gestures(sample_size):
     config = configparser.ConfigParser()
     config.read('config.ini')
@@ -233,7 +275,7 @@ def get_exam_gestures(sample_size):
     gestbase = pd.concat([static_gestures,dynamic_gestures], ignore_index = True)
     gestbase.columns = ['exam_id', *ADC_channels, *IMU_channels, 'sign', 'timestamp', 'gesture_id']
     return gestbase
-# %%
+
 def save2csv(gesture_df,sample_size):
 
 
@@ -253,45 +295,69 @@ def save2csv(gesture_df,sample_size):
 
 
     return gest_csv.to_csv('gesty.csv', index=False),gest_shtct_csv.to_csv('gesty_zwarcia.csv', index=False)
-#%%
+
 def examid_remap(gesture_df):
 
     examid_map = {
-        1:('wd',1),
-        3:('jp',2),
-        4:('mp',3),
-        5:('mp',3),
-        7:('ku',4),
-        8:('ku',4),
-        9:('dd',5),
-        10:('dd',5),
-        11:('sw',6),
-        12:('zp',7),
-        13:('zp',7),
-        14:('zp',7),
-        15:('sw',6),
-        19:('Ku',8),
-        20:('Ku',8),
-        21:('Ku',8),
-        22:('pp',9),
-        23:('pp',9),
-        24:('pp',9),
-        25:('mo',10),
-        26:('sk',11),
-        27:('mu',12),
-        28:('mu',12),
-        29:('mk',13),
-        30:('mk',13),
-        31:('mk',13),
-        32:('mk',13),
-        33:('mk',13),
-        34:('mo',14),
-        35:('mo',14),
-        36:('tt',15),
-        37:('mp',16)}
+    1  :('wd',1),
+    3  :('jp',2),
+    4  :('mp',3),
+    5  :('mp',3),
+    7  :('ku',4),
+    8  :('ku',4),
+    9  :('dd',5),
+    10 :('dd',5),
+    11 :('sw',6),
+    12 :('zp',7),
+    13 :('zp',7),
+    14 :('zp',7),
+    15 :('sw',6),
+    19 :('ku',8),
+    20 :('ku',8),
+    21 :('ku',8),
+    22 :('pp',9),
+    23 :('pp',9),
+    24 :('pp',9),
+    25 :('mo',10),
+    26 :('sk',11),
+    27 :('mu',12),
+    28 :('mu',12),
+    29 :('mk',13),
+    30 :('mk',13),
+    31 :('mk',13),
+    32 :('mk',13),
+    33 :('mk',13),
+    34 :('mo',14),
+    35 :('mo',14),
+    36 :('tt',15),
+    37 :('mp',16),
+    39 :('jp',2),
+    40 :('ku',4),
+    41 :('mk',13),
+    42 :('mk',13),
+    43 :('mo',10),
+    44 :('mo',14),
+    45 :('mp',3),
+    46 :('mp',3),
+    47 :('mp',3),
+    48 :('mp',16),
+    49 :('mu',12),
+    50 :('mu',12),
+    51 :('pp',9),
+    52 :('sk',11),
+    53 :('wd',1),
+    54 :('wd',1),
+    55 :('zp',7),
+    58 :('jP',17),
+    59 :('jP',17),
+    60 :('jP',17),
+    62 :('mp',16)
+            }
+
+
 
     gesture_df['exam_id'] = gesture_df['exam_id'].map(examid_map)
-# %%
+
 def generate_datasets(SAMPLE_SIZE):
 
     df = get_exam_gestures(SAMPLE_SIZE)
@@ -300,3 +366,15 @@ def generate_datasets(SAMPLE_SIZE):
     examid_remap(df)
     calculate_timedelta(df)
     save2csv(df,SAMPLE_SIZE)
+
+# # %%
+# def balance_classes(gesture_df):
+
+#     num_classes = gesture_df.shape[0] // SAMPLE_SIZE
+
+#     gesture_df.fillna(method='backfill', inplace=True)
+#     df = np.reshape(gesture_df, (num_classes // SAMPLE_SIZE, SAMPLE_SIZE, gesture_df.shape[1]))
+
+# #%%
+
+# %%
