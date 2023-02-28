@@ -107,6 +107,8 @@ def get_rand_gesture(sample_size, show_results = True):
 
 
 def  augment_gesture(gesture_df, nr_of_reps):
+    gesture_df.fillna(method='backfill', inplace=True)
+
     gesture_buf_full = gesture_df.to_numpy()
 
     gesture_buf = (gesture_buf_full[:, 1:17])
@@ -115,7 +117,7 @@ def  augment_gesture(gesture_df, nr_of_reps):
     gesture_buf_3d = gesture_buf.reshape(1, gesture_df.shape[0], 16)
     gesture_buf_3d_mask = gesture_buf.reshape(1, gesture_df.shape[0], 16)
 
-    plot(gesture_buf_3d)
+    #plot(gesture_buf_3d)
     
     augmenter_values = {
                         'n_speed_change':2,
@@ -140,7 +142,7 @@ def  augment_gesture(gesture_df, nr_of_reps):
 
     gesture_augmented = my_augmenter.augment(gesture_buf_3d, gesture_buf_3d_mask)
     gesture_augmented_buf = gesture_augmented[0].reshape(nr_of_reps, gesture_df.shape[0], 16)
-    plot(gesture_augmented_buf)
+    #plot(gesture_augmented_buf)
 
     sign_col = np.array(gesture_df['sign'])
     exam_id_col = np.array(gesture_df['exam_id'])
@@ -151,8 +153,7 @@ def  augment_gesture(gesture_df, nr_of_reps):
         exam_id_col = np.hstack((exam_id_col,gesture_df['exam_id']))
         tmstp_col = np.hstack((tmstp_col,gesture_df['timestamp']))
 
-    gesture_augmented_df = pd.DataFrame(np.column_stack((exam_id_col,gesture_augmented_buf.reshape(gesture_augmented_buf.shape[0]*gesture_augmented_buf.shape[1],gesture_augmented_buf.shape[2]),sign_col)))
-    gesture_augmented_df = pd.concat([gesture_augmented_df,pd.DataFrame(tmstp_col)],axis=1)
+    gesture_augmented_df = pd.DataFrame(np.column_stack((exam_id_col,gesture_augmented_buf.reshape(gesture_augmented_buf.shape[0]*gesture_augmented_buf.shape[1],gesture_augmented_buf.shape[2]),sign_col,tmstp_col)))
     
     return gesture_augmented_df
 
@@ -164,8 +165,8 @@ def read_csv(csv_path):
            dataset_df = pd.read_csv(csv_path, converters={"exam_id": literal_eval})
            kwargs['dataset_df'] = dataset_df
            func(*args, **kwargs)
-        return wrapper
-    return decorator
+           return wrapper
+        return decorator
 
 #%%
 def augment_dataset(dataset_df,nr_of_reps):
@@ -174,10 +175,10 @@ def augment_dataset(dataset_df,nr_of_reps):
     time_Series = [dataset_df.iloc[i:i + SAMPLE_SIZE].reset_index(drop=True) for i in range(0, dataset_df.shape[0] - SAMPLE_SIZE + 1, SAMPLE_SIZE)]
     #time_Series = pd.concat(time_Series, axis=1).T
 
-    aug_df = pd.DataFrame
+    aug_df = pd.DataFrame()
     
     for i in range(len(time_Series)):
-        pd.concat([aug_df,augment_gesture(time_Series[i],nr_of_reps)], ignore_index=True)
+        aug_df = pd.concat([aug_df,augment_gesture(time_Series[i],nr_of_reps)], ignore_index=True)
     
     return aug_df
 
@@ -242,21 +243,7 @@ def IMU_smoothing(gesture_df, show_results=True):
     if show_results == True:    
         gesture_df.plot(x = 'timestamp', y = [*IMU_channels], subplots =[IMU_channels[0:3], IMU_channels[3:6]])
 
-def normalize_data(gesture_df, show_results=True):
-    if show_results == True:
-        gesture_df.plot(x = 'timestamp', y = [*IMU_channels,*ADC_channels], subplots =[ADC_channels, IMU_channels[0:3], IMU_channels[3:6]])
-        
-    #normalizer = 
-    #min_max_scaler = preprocessing.MinMaxScaler()
-    #for (colname, colvals) in gesture_df.iloc[:,0:17].items():
-    #    gesture_df[colname] = min_max_scaler.fit_transform(colvals.values.reshape(-1, 1))
-    for (colname, colvals) in gesture_df.iloc[:,1:11].items():
-        gesture_df[colname] = preprocessing.normalize(colvals.values.reshape(-1, 1), norm = 'max')
-    
-        
-    if show_results == True:    
-        gesture_df.plot(x = 'timestamp', y = [*IMU_channels,*ADC_channels], subplots =[ADC_channels, IMU_channels[0:3], IMU_channels[3:6]])
-    
+
 
 def get_exam_gestures(sample_size):
     config = configparser.ConfigParser()
@@ -276,25 +263,23 @@ def get_exam_gestures(sample_size):
     gestbase.columns = ['exam_id', *ADC_channels, *IMU_channels, 'sign', 'timestamp', 'gesture_id']
     return gestbase
 
-def save2csv(gesture_df,sample_size):
+def select_shtct(gesture_df,sample_size):
 
 
 
-    gest_csv = pd.DataFrame()
-    gest_csv_l = []
-    gest_shtct_csv = pd.DataFrame()
-    gest_shtct_csv_l = []
+    gest_l = []
+    gest_shtct_l = []
     for i in range(0,gesture_df.shape[0],sample_size):
         gest = gesture_df.iloc[i:i+sample_size]
         if not detect_shortcircuit(gest, 24000):
-            gest_csv_l.append(gest)
+            gest_l.append(gest)
         else:
-            gest_shtct_csv_l.append(gest)
-    gest_csv = pd.concat(gest_csv_l, ignore_index = True)
-    gest_shtct_csv = pd.concat(gest_shtct_csv_l, ignore_index = True)
+            gest_shtct_l.append(gest)
+    gest = pd.concat(gest_l, ignore_index = True)
+    gest_shtct = pd.concat(gest_shtct_l, ignore_index = True)
 
-
-    return gest_csv.to_csv('gesty.csv', index=False),gest_shtct_csv.to_csv('gesty_zwarcia.csv', index=False)
+    return gest, gest_shtct
+    #return gest_csv.to_csv('gesty.csv', index=False),gest_shtct_csv.to_csv('gesty_zwarcia.csv', index=False)
 
 def examid_remap(gesture_df):
 
@@ -361,11 +346,18 @@ def examid_remap(gesture_df):
 def generate_datasets(SAMPLE_SIZE):
 
     df = get_exam_gestures(SAMPLE_SIZE)
+    df, df_st = select_shtct(df,SAMPLE_SIZE)
     ADC_smoothing(df,SAMPLE_SIZE)
     IMU_smoothing(df,SAMPLE_SIZE)
     examid_remap(df)
     calculate_timedelta(df)
-    save2csv(df,SAMPLE_SIZE)
+    df_aug = augment_dataset(df,5)
+    df.to_csv('gesty.csv', index=False)
+    df_st.to_csv('gesty_zwarcia.csv', index=False)
+    df_aug.to_csv('gesty_aug.csv', index=False)
+
+
+
 
 # # %%
 # def balance_classes(gesture_df):
