@@ -154,7 +154,7 @@ def  augment_gesture(gesture_df, nr_of_reps):
         tmstp_col = np.hstack((tmstp_col,gesture_df['timestamp']))
 
     gesture_augmented_df = pd.DataFrame(np.column_stack((exam_id_col,gesture_augmented_buf.reshape(gesture_augmented_buf.shape[0]*gesture_augmented_buf.shape[1],gesture_augmented_buf.shape[2]),sign_col,tmstp_col)))
-    
+    gesture_augmented_df.columns = gesture_df.columns[:19]
     return gesture_augmented_df
 
 
@@ -167,8 +167,18 @@ def read_csv(csv_path):
            func(*args, **kwargs)
            return wrapper
         return decorator
+    
+def save_as_csv(func):
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        if isinstance(result, pd.DataFrame):
+            result.to_csv('output.csv', index=False)
+        return result
+    return wrapper
+    
 
 #%%
+#@save_as_csv
 def augment_dataset(dataset_df,nr_of_reps):
     
   
