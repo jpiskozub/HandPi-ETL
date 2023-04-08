@@ -108,7 +108,7 @@ def get_rand_gesture(sample_size, show_results = True):
 
 def  augment_gesture(gesture_df, nr_of_reps):
     gesture_df.fillna(method='backfill', inplace=True)
-
+    gesture_df.replace(np.NaN, pd.NaT)
     gesture_buf_full = gesture_df.to_numpy()
 
     gesture_buf = (gesture_buf_full[:, 1:17])
@@ -122,7 +122,7 @@ def  augment_gesture(gesture_df, nr_of_reps):
     augmenter_values = {
                         'n_speed_change':2,
                         'max_speed_ratio':2,
-                        'max_drift':1,
+                        'max_drift':0.5,
                         'n_drift_points':2,
                         'noise_scale':0.03
                         }
@@ -153,7 +153,8 @@ def  augment_gesture(gesture_df, nr_of_reps):
         exam_id_col = np.hstack((exam_id_col,gesture_df['exam_id']))
         tmstp_col = np.hstack((tmstp_col,gesture_df['timestamp']))
 
-    gesture_augmented_df = pd.DataFrame(np.column_stack((exam_id_col,gesture_augmented_buf.reshape(gesture_augmented_buf.shape[0]*gesture_augmented_buf.shape[1],gesture_augmented_buf.shape[2]),sign_col,tmstp_col)))
+    gesture_augmented_df = pd.DataFrame(np.column_stack((exam_id_col,gesture_augmented_buf.reshape(gesture_augmented_buf.shape[0]*gesture_augmented_buf.shape[1],gesture_augmented_buf.shape[2]),sign_col)))
+    gesture_augmented_df = pd.concat([gesture_augmented_df,pd.DataFrame(tmstp_col).squeeze()], axis=1)
     gesture_augmented_df.columns = gesture_df.columns[:19]
     return gesture_augmented_df
 
